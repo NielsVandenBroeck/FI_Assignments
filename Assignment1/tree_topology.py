@@ -36,7 +36,7 @@ class CustomTopo(Topo):
             for j in range(fanout):
                 edges.append(self.addSwitch(f's{switch}'))
                 switch += 1
-                self.addLink(aggregations[i], edges[j], **linkopts2)
+                self.addLink(aggregations[i], edges[i*fanout + j], **linkopts2)
 
         for i in range(len(edges)):
             for j in range(fanout):
