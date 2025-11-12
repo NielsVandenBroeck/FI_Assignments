@@ -20,12 +20,11 @@ policyFile = "%s/pox/pox/misc/firewall-policies.csv" % os.environ['HOME']
 
 class Firewall(EventMixin):
 
-    def __init__(self, bi_directional=False):
+    def __init__(self):
         self.listenTo(core.openflow)
         log.debug("Activating Firewall")
 
         self.blocked = set()
-        self.bi_directional = bi_directional
         self._read_firewall_rules()
 
     def _read_firewall_rules(self):
@@ -37,8 +36,6 @@ class Firewall(EventMixin):
                 for row in reader:
                     _, src, dest = row
                     self.blocked.add((EthAddr(src), EthAddr(dest)))
-                    if self.bi_directional:
-                        self.blocked.add((dest, src))
 
                     log.info(f"\n\tsrc: {src}, dst: {dest}")
         except IOError as e:
