@@ -1,6 +1,8 @@
  # Future Internet Assignment 2
 ## Testing out POX
-command: mininet@mininet-vm:~/pox$ python pox.py log.level --DEBUG Assignment-2.of_sw_tutorial
+```bash
+mininet@mininet-vm:~/pox$ python pox.py log.level --DEBUG Assignment-2.of_sw_tutorial
+```
 
 - Dumb HUB:
     - h1: all messages
@@ -18,7 +20,7 @@ command: mininet@mininet-vm:~/pox$ python pox.py log.level --DEBUG Assignment-2.
   - h1: only ARP where 2 twice
 
 ## Firewall
-Handy dandy
+Commands before running the firewall and topology:
 ```bash
 sudo mn -c
 sudo pkill -f controller
@@ -28,19 +30,23 @@ sudo lsof -i :6633
 sudo kill -9 (PID)
 ```
 
-Run it
+Running the firewall
 ```bash
 python pox.py log.level --DEBUG forwarding.l2_learning Assignment-2.Skeleton-Lab-2
 ```
 
-FOR CIRCULAR TOPOLOGIES:
+Add openflow.discovery and openflow.spanning_tree arguments for circular topologies:
 ```bash
 python pox.py openflow.discovery openflow.spanning_tree log.level --DEBUG forwarding.l2_learning Assignment-2.Skeleton-Lab-2
 ```
 
 
 
-## Example topologies
+## Example topologies and their pingall traces
+
+
+When doing Pingall, it will send all possible packets from each host to another. We can easily check which connections fail when a X appears, otherwise, the name of the host is shown.
+
 ### Single:
 ```
 mininet@mininet-vm:~$ sudo -E mn --topo single,3 --mac   --switch ovsk,protocols=OpenFlow10   --controller=remote,ip=127.0.0.1,port=6633
@@ -106,7 +112,38 @@ h8 -> h1 h2 h3 h4 h5 h6 h7
 ```
 
 ### Circular:
+For this type of topology, we created a python file where three switches are connected to each other in a circular shape. Each switch has a host connected to it.
+The output looks slightly different from the other examples since we ran it through a python file.
 
-#### Explain omgezet naar tree?
+To make this topology work without the packets to circulate infinitely, we added openflow.discovery and openflow.spanning_tree to make pox transform the topology into a tree.
 
+```
+mininet@mininet-vm:~$ sudo python3 Assignments/circular_topology.py 
+*** Adding remote controller
+*** Adding switches
+*** Creating links
+*** Adding hosts
+*** Starting network
+*** Configuring hosts
+h1 h2 h3 
+*** Starting controller
+c0 
+*** Starting 3 switches
+s1 s2 s3 ...
+*** Testing connectivity
+*** Ping: testing ping reachability
+h1 -> h2 h3 
+h2 -> h1 X 
+h3 -> h1 X 
+*** Results: 33% dropped (4/6 received)
+*** Stopping 1 controllers
+c0 
+*** Stopping 6 links
+......
+*** Stopping 3 switches
+s1 s2 s3 
+*** Stopping 3 hosts
+h1 h2 h3 
+*** Done
+```
 
