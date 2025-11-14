@@ -46,9 +46,10 @@ class Firewall(EventMixin):
         log.debug("Switch %s connected, installing firewall rules", dpidToStr(event.dpid))
 
         for (src, dst) in self.blocked:
-            msg = of.ofp_flow_mod()
+            msg = of.ofp_flow_mod() # msg to modify flow table
             msg.match.dl_src = src
             msg.match.dl_dst = dst
+            msg.actions = [] # can be left out default actions is to drop
             event.connection.send(msg)
             log.debug("Dropped traffic rule installed: %s -> %s", src, dst)
         log.debug("Installed rules in %s", dpidToStr(event.dpid))
