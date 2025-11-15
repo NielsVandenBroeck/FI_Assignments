@@ -1,6 +1,4 @@
 # Part of this code is taken from the SDN coursera course by Prof. Nick Feamster
-
-
 from pox.core import core
 import pox.openflow.libopenflow_01 as of
 from pox.lib.revent import *
