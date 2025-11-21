@@ -90,13 +90,13 @@ class CustomSlice (EventMixin):
 
             # --- Connection between H3 and HTTP (80) ---
             # Path: S3 -> S6 -> S7
-            (D3, MAC2, MAC6, 80): D6,
-            (D6, MAC2, MAC6, 80): D7,
-            (D7, MAC2, MAC6, 80): None,
+            (D3, MAC3, MAC6, 80): D6,
+            (D6, MAC3, MAC6, 80): D7,
+            (D7, MAC3, MAC6, 80): None,
             # Path: S7 -> S5 -> S2
-            (D7, MAC6, MAC2, 80): D6,
-            (D6, MAC6, MAC2, 80): D3,
-            (D3, MAC6, MAC2, 80): None,
+            (D7, MAC6, MAC3, 80): D6,
+            (D6, MAC6, MAC3, 80): D3,
+            (D3, MAC6, MAC3, 80): None,
 
             # --- Connection between H4 and Video (200) ---
             # Path: S3 -> S2 -> S1 -> S4 -> S7
