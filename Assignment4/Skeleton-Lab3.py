@@ -46,9 +46,8 @@ class CustomSlice (EventMixin):
         MAC2 = EthAddr('00:00:00:00:00:02')
         MAC3 = EthAddr('00:00:00:00:00:03')
         MAC4 = EthAddr('00:00:00:00:00:04')
-        MAC5 = EthAddr('00:00:00:00:00:05') # VIDEO
-        MAC6 = EthAddr('00:00:00:00:00:06') # HTTP
-
+        MAC5 = EthAddr('00:00:00:00:00:05')  # VIDEO
+        MAC6 = EthAddr('00:00:00:00:00:06')  # HTTP
 
         # If a packet is at switch X, coming from host A, going to host/server B, and it arrived on port P,
         # then the next switch along the correct path is Y
@@ -93,7 +92,7 @@ class CustomSlice (EventMixin):
             (D3, MAC3, MAC6, 80): D6,
             (D6, MAC3, MAC6, 80): D7,
             (D7, MAC3, MAC6, 80): None,
-            # Path: S7 -> S5 -> S2
+            # Path: S7 -> S5 -> S3
             (D7, MAC6, MAC3, 80): D6,
             (D6, MAC6, MAC3, 80): D3,
             (D3, MAC6, MAC3, 80): None,
@@ -135,6 +134,7 @@ class CustomSlice (EventMixin):
         packet = event.parsed
         tcpp = event.parsed.find('tcp')
         udpp = event.parsed.find('udp')
+        in_port = event.port
         # tcpp=80
 
         # flood, but don't install the rule
@@ -156,6 +156,24 @@ class CustomSlice (EventMixin):
             msg.in_port = event.port
             event.connection.send(msg)
 
+        # Helper: install forwarding flow toward out_port
+        def install_forward(packet, out_port, idle=15, hard=0):
+            fm = of.ofp_flow_mod()
+            fm.match = of.ofp_match.from_packet(packet, in_port)
+            fm.idle_timeout = idle
+            fm.hard_timeout = hard
+            fm.actions.append(of.ofp_action_output(port = out_port))
+            # optional: prevent matching flood (we let match include in_port via from_packet)
+            event.connection.send(fm)
+
+        # Helper: install drop flow (match packet, no actions)
+        def install_drop(packet, idle=30, hard=0):
+            fm = of.ofp_flow_mod()
+            fm.match = of.ofp_match.from_packet(packet, in_port)
+            fm.idle_timeout = idle
+            fm.hard_timeout = hard
+            # no actions -> drop
+            event.connection.send(fm)
 
         def forward (message = None):
             this_dpid = dpid_to_str(event.dpid)
@@ -169,24 +187,70 @@ class CustomSlice (EventMixin):
 
             try:
                 # Add your logic here
-                # 1. Determine the application port and protocol
-                dst_port = None
-                protocol = None
-
-                # Check for VIDEO (port 200 UDP)
-                udpp = packet.find('udp')
-                if udpp is not None and (udpp.dstport == 200 or udpp.srcport == 200):
-                    dst_port = 200
-                    protocol = 'UDP'
-
-                # Check for HTTP (port 80 TCP)
                 tcpp = packet.find('tcp')
-                if tcpp is not None and (tcpp.dstport == 80 or tcpp.srcport == 80):
-                    dst_port = 80
-                    protocol = 'TCP'
+                udpp = packet.find('udp')
+                dst_transport_port = None
 
-                #TODO idk mannnn
+                if udpp is not None:
+                    # For UDP use either src or dst port to match service port
+                    if udpp.srcport:
+                        srcp = udpp.srcport
+                    else:
+                        srcp = None
+                    dstp = udpp.dstport
+                    # we treat either src or dst as the service port if it equals known ones
+                    if dstp:
+                        dst_transport_port = dstp
+                    elif srcp:
+                        dst_transport_port = srcp
+                elif tcpp is not None:
+                    # for TCP
+                    if tcpp.dstport:
+                        dst_transport_port = tcpp.dstport
+                    elif tcpp.srcport:
+                        dst_transport_port = tcpp.srcport
 
+                # If we found a transport port of interest (80 or 200 in your scenario)
+                if dst_transport_port is not None:
+                    key = (this_dpid, packet.src, packet.dst, dst_transport_port)
+                    if key in self.portmap:
+                        next_dpid = self.portmap[key]
+                        # If next_dpid is None -> this switch should forward to the host (edge)
+                        if next_dpid is None:
+                            # We must send to the host port on this switch
+                            if packet.dst in self.mac_to_port[this_dpid]:
+                                out_port = self.mac_to_port[this_dpid][packet.dst]
+                                log.info("Allowed edge delivery on %s: %s -> %s (port %d) for service %d",
+                                         this_dpid, packet.src, packet.dst, out_port, dst_transport_port)
+                                install_forward(packet, out_port)
+                                return
+                            else:
+                                # Host port not yet learned. To be strict, drop (prevents unauthorized reachability).
+                                log.info("Endpoint host port unknown on %s for %s -> %s; dropping to enforce slice",
+                                         this_dpid, packet.src, packet.dst)
+                                install_drop(packet)
+                                return
+                        else:
+                            # Intermediate switch: forward towards next switch using adjacency map
+                            if next_dpid in self.adjacency[this_dpid] and self.adjacency[this_dpid][
+                                next_dpid] is not None:
+                                out_port = self.adjacency[this_dpid][next_dpid]
+                                log.info("Allowed transit on %s for service %d: %s -> %s via %s (port %d)",
+                                         this_dpid, dst_transport_port, packet.src, packet.dst, next_dpid, out_port)
+                                install_forward(packet, out_port)
+                                return
+                            else:
+                                # Adjacency not known yet: drop to prevent bypass
+                                log.info("Adjacency %s -> %s unknown (switch %s). Dropping to enforce slice.",
+                                         this_dpid, next_dpid, this_dpid)
+                                install_drop(packet)
+                                return
+                    else:
+                        # Service/port not allowed from this switch for this src/dst -> drop
+                        log.info("Disallowed flow on %s: %s -> %s (service %s). Installing drop.",
+                                 this_dpid, packet.src, packet.dst, dst_transport_port)
+                        install_drop(packet)
+                        return
             except AttributeError:
                 log.debug("packet type has no transport ports, flooding")
 
