@@ -24,6 +24,10 @@ class CustomSlice (EventMixin):
         # Adjacency map.  [sw1][sw2] -> port from sw1 to sw2
         self.adjacency = defaultdict(lambda:defaultdict(lambda:None))
 
+        # MAC to port mapping for learning which port hosts are on
+        # {dpid: {mac: port}}
+        self.mac_to_port = defaultdict(lambda: defaultdict(lambda: None))
+
         '''
         We suggest an structure that relates origin-destination MAC address and port:
         (dpid, origin MAC, destination MAC, port : following dpid)
@@ -92,7 +96,7 @@ class CustomSlice (EventMixin):
             (D3, MAC3, MAC6, 80): D6,
             (D6, MAC3, MAC6, 80): D7,
             (D7, MAC3, MAC6, 80): None,
-            # Path: S7 -> S5 -> S3
+            # Path: S7 -> S6 -> S3
             (D7, MAC6, MAC3, 80): D6,
             (D6, MAC6, MAC3, 80): D3,
             (D3, MAC6, MAC3, 80): None,
@@ -110,6 +114,122 @@ class CustomSlice (EventMixin):
             (D1, MAC5, MAC4, 200): D2,
             (D2, MAC5, MAC4, 200): D3,
             (D3, MAC5, MAC4, 200): None,
+
+            # --- ICMP/Default paths (port 0) ---
+            # H1 <-> H5 (using video path since it's shorter)
+            (D1, MAC1, MAC5, 0): D4,
+            (D4, MAC1, MAC5, 0): D7,
+            (D7, MAC1, MAC5, 0): None,
+            (D7, MAC5, MAC1, 0): D4,
+            (D4, MAC5, MAC1, 0): D1,
+            (D1, MAC5, MAC1, 0): None,
+
+            # H1 <-> H6 (using HTTP path)
+            (D1, MAC1, MAC6, 0): D2,
+            (D2, MAC1, MAC6, 0): D5,
+            (D5, MAC1, MAC6, 0): D7,
+            (D7, MAC1, MAC6, 0): None,
+            (D7, MAC6, MAC1, 0): D5,
+            (D5, MAC6, MAC1, 0): D2,
+            (D2, MAC6, MAC1, 0): D1,
+            (D1, MAC6, MAC1, 0): None,
+
+            # H2 <-> H5 (via S2->S1->S4->S7)
+            (D2, MAC2, MAC5, 0): D1,
+            (D1, MAC2, MAC5, 0): D4,
+            (D4, MAC2, MAC5, 0): D7,
+            (D7, MAC2, MAC5, 0): None,
+            (D7, MAC5, MAC2, 0): D4,
+            (D4, MAC5, MAC2, 0): D1,
+            (D1, MAC5, MAC2, 0): D2,
+            (D2, MAC5, MAC2, 0): None,
+
+            # H2 <-> H6 (using HTTP path)
+            (D2, MAC2, MAC6, 0): D5,
+            (D5, MAC2, MAC6, 0): D7,
+            (D7, MAC2, MAC6, 0): None,
+            (D7, MAC6, MAC2, 0): D5,
+            (D5, MAC6, MAC2, 0): D2,
+            (D2, MAC6, MAC2, 0): None,
+
+            # H3 <-> H5 (via S3->S2->S1->S4->S7)
+            (D3, MAC3, MAC5, 0): D2,
+            (D2, MAC3, MAC5, 0): D1,
+            (D1, MAC3, MAC5, 0): D4,
+            (D4, MAC3, MAC5, 0): D7,
+            (D7, MAC3, MAC5, 0): None,
+            (D7, MAC5, MAC3, 0): D4,
+            (D4, MAC5, MAC3, 0): D1,
+            (D1, MAC5, MAC3, 0): D2,
+            (D2, MAC5, MAC3, 0): D3,
+            (D3, MAC5, MAC3, 0): None,
+
+            # H3 <-> H6 (using HTTP path)
+            (D3, MAC3, MAC6, 0): D6,
+            (D6, MAC3, MAC6, 0): D7,
+            (D7, MAC3, MAC6, 0): None,
+            (D7, MAC6, MAC3, 0): D6,
+            (D6, MAC6, MAC3, 0): D3,
+            (D3, MAC6, MAC3, 0): None,
+
+            # H4 <-> H5 (using video path)
+            (D3, MAC4, MAC5, 0): D2,
+            (D2, MAC4, MAC5, 0): D1,
+            (D1, MAC4, MAC5, 0): D4,
+            (D4, MAC4, MAC5, 0): D7,
+            (D7, MAC4, MAC5, 0): None,
+            (D7, MAC5, MAC4, 0): D4,
+            (D4, MAC5, MAC4, 0): D1,
+            (D1, MAC5, MAC4, 0): D2,
+            (D2, MAC5, MAC4, 0): D3,
+            (D3, MAC5, MAC4, 0): None,
+
+            # H4 <-> H6 (via S3->S6->S7)
+            (D3, MAC4, MAC6, 0): D6,
+            (D6, MAC4, MAC6, 0): D7,
+            (D7, MAC4, MAC6, 0): None,
+            (D7, MAC6, MAC4, 0): D6,
+            (D6, MAC6, MAC4, 0): D3,
+            (D3, MAC6, MAC4, 0): None,
+
+            # H1-H4 interconnectivity (between regular hosts)
+            # H1 <-> H2
+            (D1, MAC1, MAC2, 0): D2,
+            (D2, MAC1, MAC2, 0): None,
+            (D2, MAC2, MAC1, 0): D1,
+            (D1, MAC2, MAC1, 0): None,
+
+            # H1 <-> H3
+            (D1, MAC1, MAC3, 0): D2,
+            (D2, MAC1, MAC3, 0): D3,
+            (D3, MAC1, MAC3, 0): None,
+            (D3, MAC3, MAC1, 0): D2,
+            (D2, MAC3, MAC1, 0): D1,
+            (D1, MAC3, MAC1, 0): None,
+
+            # H1 <-> H4
+            (D1, MAC1, MAC4, 0): D2,
+            (D2, MAC1, MAC4, 0): D3,
+            (D3, MAC1, MAC4, 0): None,
+            (D3, MAC4, MAC1, 0): D2,
+            (D2, MAC4, MAC1, 0): D1,
+            (D1, MAC4, MAC1, 0): None,
+
+            # H2 <-> H3
+            (D2, MAC2, MAC3, 0): D3,
+            (D3, MAC2, MAC3, 0): None,
+            (D3, MAC3, MAC2, 0): D2,
+            (D2, MAC3, MAC2, 0): None,
+
+            # H2 <-> H4
+            (D2, MAC2, MAC4, 0): D3,
+            (D3, MAC2, MAC4, 0): None,
+            (D3, MAC4, MAC2, 0): D2,
+            (D2, MAC4, MAC2, 0): None,
+
+            # H3 <-> H4
+            (D3, MAC3, MAC4, 0): None,
+            (D3, MAC4, MAC3, 0): None,
         }
 
     def _handle_ConnectionUp (self, event):
@@ -156,106 +276,59 @@ class CustomSlice (EventMixin):
             msg.in_port = event.port
             event.connection.send(msg)
 
-        # Helper: install forwarding flow toward out_port
-        def install_forward(packet, out_port, idle=15, hard=0):
-            fm = of.ofp_flow_mod()
-            fm.match = of.ofp_match.from_packet(packet, in_port)
-            fm.idle_timeout = idle
-            fm.hard_timeout = hard
-            fm.actions.append(of.ofp_action_output(port = out_port))
-            # optional: prevent matching flood (we let match include in_port via from_packet)
-            event.connection.send(fm)
-
-        # Helper: install drop flow (match packet, no actions)
-        def install_drop(packet, idle=30, hard=0):
-            fm = of.ofp_flow_mod()
-            fm.match = of.ofp_match.from_packet(packet, in_port)
-            fm.idle_timeout = idle
-            fm.hard_timeout = hard
-            # no actions -> drop
-            event.connection.send(fm)
-
-        def forward (message = None):
+        def forward(message=None):
             this_dpid = dpid_to_str(event.dpid)
+
+            # Learn the source MAC and port
+            self.mac_to_port[this_dpid][packet.src] = event.port
 
             if packet.dst.is_multicast:
                 flood()
                 return
             else:
-                log.debug("Got unicast packet for %s at %s (input port %d):",
-                          packet.dst, dpid_to_str(event.dpid), event.port)
+                try:
+                    # 1. Determine the specific port (200 or 80)
+                    port_number = 0
+                    if tcpp is not None:
+                        port_number = tcpp.dstport
+                    elif udpp is not None:
+                        port_number = udpp.dstport
 
-            try:
-                # Add your logic here
-                tcpp = packet.find('tcp')
-                udpp = packet.find('udp')
-                dst_transport_port = None
+                    # 2. Try to find a path for the SPECIFIC port (Video/HTTP)
+                    lookup_key = (this_dpid, packet.src, packet.dst, port_number)
 
-                if udpp is not None:
-                    # For UDP use either src or dst port to match service port
-                    if udpp.srcport:
-                        srcp = udpp.srcport
-                    else:
-                        srcp = None
-                    dstp = udpp.dstport
-                    # we treat either src or dst as the service port if it equals known ones
-                    if dstp:
-                        dst_transport_port = dstp
-                    elif srcp:
-                        dst_transport_port = srcp
-                elif tcpp is not None:
-                    # for TCP
-                    if tcpp.dstport:
-                        dst_transport_port = tcpp.dstport
-                    elif tcpp.srcport:
-                        dst_transport_port = tcpp.srcport
+                    # 3. FALLBACK: If specific port path is not found, try the DEFAULT path (0)
+                    if lookup_key not in self.portmap:
+                        log.debug("Specific port %s not found, trying default path (0)", port_number)
+                        lookup_key = (this_dpid, packet.src, packet.dst, 0)
 
-                # If we found a transport port of interest (80 or 200 in your scenario)
-                if dst_transport_port is not None:
-                    key = (this_dpid, packet.src, packet.dst, dst_transport_port)
-                    if key in self.portmap:
-                        next_dpid = self.portmap[key]
-                        # If next_dpid is None -> this switch should forward to the host (edge)
+                    # 4. Process the Found Path
+                    if lookup_key in self.portmap:
+                        next_dpid = self.portmap[lookup_key]
+
                         if next_dpid is None:
-                            # We must send to the host port on this switch
+                            # Final switch: deliver to host
                             if packet.dst in self.mac_to_port[this_dpid]:
-                                out_port = self.mac_to_port[this_dpid][packet.dst]
-                                log.info("Allowed edge delivery on %s: %s -> %s (port %d) for service %d",
-                                         this_dpid, packet.src, packet.dst, out_port, dst_transport_port)
-                                install_forward(packet, out_port)
-                                return
+                                outport = self.mac_to_port[this_dpid][packet.dst]
+                                install_fwdrule(event, packet, outport)
                             else:
-                                # Host port not yet learned. To be strict, drop (prevents unauthorized reachability).
-                                log.info("Endpoint host port unknown on %s for %s -> %s; dropping to enforce slice",
-                                         this_dpid, packet.src, packet.dst)
-                                install_drop(packet)
-                                return
+                                flood()
                         else:
-                            # Intermediate switch: forward towards next switch using adjacency map
-                            if next_dpid in self.adjacency[this_dpid] and self.adjacency[this_dpid][
-                                next_dpid] is not None:
-                                out_port = self.adjacency[this_dpid][next_dpid]
-                                log.info("Allowed transit on %s for service %d: %s -> %s via %s (port %d)",
-                                         this_dpid, dst_transport_port, packet.src, packet.dst, next_dpid, out_port)
-                                install_forward(packet, out_port)
-                                return
+                            # Forward to next switch
+                            if next_dpid in self.adjacency[this_dpid]:
+                                outport = self.adjacency[this_dpid][next_dpid]
+                                install_fwdrule(event, packet, outport)
                             else:
-                                # Adjacency not known yet: drop to prevent bypass
-                                log.info("Adjacency %s -> %s unknown (switch %s). Dropping to enforce slice.",
-                                         this_dpid, next_dpid, this_dpid)
-                                install_drop(packet)
-                                return
+                                flood()
                     else:
-                        # Service/port not allowed from this switch for this src/dst -> drop
-                        log.info("Disallowed flow on %s: %s -> %s (service %s). Installing drop.",
-                                 this_dpid, packet.src, packet.dst, dst_transport_port)
-                        install_drop(packet)
-                        return
-            except AttributeError:
-                log.debug("packet type has no transport ports, flooding")
+                        flood()
 
-            # flood and install the flow table entry for the flood
-            install_fwdrule(event,packet,of.OFPP_FLOOD)
+                except AttributeError as e:
+                    log.debug("AttributeError: %s, flooding", str(e))
+                    flood()
+                except KeyError as e:
+                    log.debug("KeyError: %s, flooding", str(e))
+                    flood()
 
         forward()
 
