@@ -48,7 +48,18 @@ header arp_t {
 //TO-DO: Define the fields of the IPv4 header
 //HINT: Refer to RFC791
 header ipv4_t {
-
+  bit<4> version;
+  bit<4> IHL;
+  bit<8> service;
+  bit<16> length;
+  bit<16> id;
+  bit<3> flags;
+  bit<13> offset;
+  bit<8> ttl;
+  bit<8> protocol;
+  bit<16> checksum;
+  bit<32> srcAddr;
+  bit<32> destAddr;
 }
 
 struct parsed_headers_t {
