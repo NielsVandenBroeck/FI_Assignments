@@ -27,39 +27,39 @@ const bit<16> ARP_REPLY = 2; //Operation 2 is reply
 
 // Standard IEEE 802.3
 header ethernet_t {
-	bit<48>  dst_addr;
-	mac_addr_t  src_addr;
-	bit<16>     ether_type;
+    bit<48>  dst_addr;
+    mac_addr_t  src_addr;
+    bit<16>     ether_type;
 }
 
 // Address Resolution Protocol RFC 826
 header arp_t {
-  bit<16>   h_type;
-  bit<16>   p_type;
-  bit<8>    h_len;
-  bit<8>    p_len;
-  bit<16>   op_code;
-  mac_addr_t src_mac;
-  ipv4_addr_t src_ip;
-  mac_addr_t dst_mac;
-  ipv4_addr_t dst_ip;
+    bit<16>   h_type;
+    bit<16>   p_type;
+    bit<8>    h_len;
+    bit<8>    p_len;
+    bit<16>   op_code;
+    mac_addr_t src_mac;
+    ipv4_addr_t src_ip;
+    mac_addr_t dst_mac;
+    ipv4_addr_t dst_ip;
 }
 
 //TO-DO: Define the fields of the IPv4 header
 //HINT: Refer to RFC791
 header ipv4_t {
-  bit<4> version;
-  bit<4> IHL;
-  bit<8> service;
-  bit<16> length;
-  bit<16> id;
-  bit<3> flags;
-  bit<13> offset;
-  bit<8> ttl;
-  bit<8> protocol;
-  bit<16> checksum;
-  bit<32> srcAddr;
-  bit<32> destAddr;
+    bit<4> version;
+    bit<4> IHL;
+    bit<8> service;
+    bit<16> length;
+    bit<16> id;
+    bit<3> flags;
+    bit<13> offset;
+    bit<8> ttl;
+    bit<8> protocol;
+    bit<16> checksum;
+    ipv4_addr_t src_addr;
+    ipv4_addr_t dst_addr;
 }
 
 struct parsed_headers_t {
@@ -146,8 +146,10 @@ control IngressPipeImpl (inout parsed_headers_t    hdr,
     action set_egress_port(port_num_t port_num, mac_addr_t dst_mac) {
         standard_metadata.egress_spec = port_num;
 	// TO-DO: Update the destination mac address with the one received as parameter
+        hdr.ethernet.dst_addr = dst_mac;
 
 	// TO-DO: Update the IPv4 TTL field to mark the packet traverses the switch
+	hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
     }
 
     table ipv4_forward {
@@ -200,15 +202,22 @@ control IngressPipeImpl (inout parsed_headers_t    hdr,
 
 	// TO-DO: The nat_destination action updates the ip address, the destination mac address
 	// and sets the destination mac address and the outgoing port
+	hdr.ethernet.dst_addr = dest_mac;
+	standard_metadata.egress_spec = dst_port;
+
+	hdr.ipv4.src_addr = new_src_address;
+	hdr.ipv4.dst_addr = new_dst_address;
    }
 
 
 
     table nat {
 	key = {
-		// TO-DO: The triggers of the NAT action are the destination MAC and IP addresses
-		// The type of match is exact
-	}
+            // TO-DO: The triggers of the NAT action are the destination MAC and IP addresses
+            // The type of match is exact
+            hdr.ethernet.dst_addr : exact;
+            hdr.ipv4.dst_addr     : exact;
+            }
 	actions = {
 		nat_destination;
 		drop;
@@ -223,6 +232,8 @@ control IngressPipeImpl (inout parsed_headers_t    hdr,
         if (hdr.ethernet.isValid() && hdr.ethernet.ether_type == ETHERTYPE_IPV4 && hdr.ipv4.isValid()){
 		if (hdr.ipv4.protocol == IPV4_ICMP) {
 			// TO-DO: Check the NAT table to update addresses, and do the IPv4 forwarding
+                    nat.apply();
+                    ipv4_forward.apply();
 		}
         } else if (hdr.ethernet.ether_type == ETHERTYPE_ARP) {
              arp_exact.apply();
@@ -249,7 +260,18 @@ control ComputeChecksumImpl(inout parsed_headers_t hdr,
             hdr.ipv4.isValid(),
             {
 		// TO-DO: The checksum is calculated on the fields of the IPv4 header
-		// and updates the corresponding field of the header 
+		// and updates the corresponding field of the header
+                hdr.ipv4.version,
+                hdr.ipv4.IHL,
+                hdr.ipv4.service,
+                hdr.ipv4.length,
+                hdr.ipv4.id,
+                hdr.ipv4.flags,
+                hdr.ipv4.offset,
+                hdr.ipv4.ttl,
+                hdr.ipv4.protocol,
+                hdr.ipv4.src_addr,
+                hdr.ipv4.dst_addr
             },
             hdr.ipv4.checksum,
             HashAlgorithm.csum16);

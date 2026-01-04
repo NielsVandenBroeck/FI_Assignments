@@ -300,7 +300,7 @@ class CustomSlice (EventMixin):
                     # 3. FALLBACK: If specific port path is not found, try the DEFAULT path (0)
                     if lookup_key not in self.portmap:
                         log.debug("Specific port %s not found, trying default path (0)", port_number)
-                        lookup_key = (this_dpid, packet.src, packet.dst, 0)
+                        lookup_key = (this_dpid, packet.src, packet.dst, 0) 
 
                     # 4. Process the Found Path
                     if lookup_key in self.portmap:
