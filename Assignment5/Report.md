@@ -17,4 +17,5 @@
 3. Open a new terminal window. 
 4. Run `cat rules.sh - | simple_switch_CLI --thrift-port 9090`
 5. Go to mininet 
-6. Run  `ping h1 10.0.1.51 -c 5`
+6. Run `ping h1 10.0.1.51 -c 5`
+7. Run `ping h2 10.0.1.52 -c 5`
