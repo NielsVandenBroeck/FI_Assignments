@@ -202,7 +202,7 @@ control IngressPipeImpl (inout parsed_headers_t    hdr,
 
 	// TO-DO: The nat_destination action updates the ip address, the destination mac address
 	// and sets the destination mac address and the outgoing port
-	hdr.ethernet.dst_addr = dest_mac;
+	hdr.ethernet.dst_addr = dst_mac;
 	standard_metadata.egress_spec = dst_port;
 
 	hdr.ipv4.src_addr = new_src_address;
